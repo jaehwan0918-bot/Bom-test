@@ -1,0 +1,12 @@
+{
+  "name": "smart-bom-selector-v5-3k-windows-exe",
+  "version": "5.3.11",
+  "private": true,
+  "description": "Resilient DigiKey/Mouser live BOM selection without Demo fallback",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

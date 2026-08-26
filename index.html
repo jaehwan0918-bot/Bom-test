@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart BOM Selector V5.3K</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar"><div id="buildVersionBadge" class="build-version-badge">BUILD V5.3K</div>
+    <div>
+      <div class="eyebrow">ENGINEERING COMPONENT SELECTION</div>
+      <h1>Smart BOM Selector <span>V5.3HB</span></h1>
+      <p>실시간 부품 데이터 + PDF/OrCAD 분석 + 온도/제조사 기본 선정 규칙 + ECO 자동화</p>
+    </div>
+    <div class="top-actions">
+      <div class="status-pill" id="appStatus">초기화 중</div>
+      <button id="healthRefresh" class="ghost-btn">API 상태 새로고침</button>
+      <button id="quitDesktopBtn" class="ghost-btn" style="display:none">프로그램 종료</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card api-card">
+      <div class="section-title">
+        <div class="step">0</div>
+        <div>
+          <h2>실시간 부품 DB 연결</h2>
+          <p>API 키는 Vercel 환경변수에 저장되며 브라우저에는 노출되지 않습니다.</p>
+        </div>
+      </div>
+      <div class="api-status-grid">
+        <div class="api-provider">
+          <b>Mouser</b><span id="statusMouser" class="api-dot off">확인 중</span>
+        </div>
+        <div class="api-provider">
+          <b>DigiKey</b><span id="statusDigiKey" class="api-dot off">확인 중</span>
+        </div>
+        <div class="api-provider">
+          <b>Nexar / Octopart</b><span id="statusNexar" class="api-dot off">확인 중</span>
+        </div>
+      </div>
+      <div class="api-backend-config">
+        <label>Vercel API 주소
+          <input id="apiBaseUrlInput" placeholder="https://your-project.vercel.app" />
+        </label>
+        <button id="saveApiBaseUrlBtn" class="secondary-btn">저장 + 연결 테스트</button>
+        <span id="backendConfigState" class="api-dot off">확인 중</span>
+      </div>
+      <div class="inline-note" id="apiHint">
+        Windows EXE는 Vercel API를 통해 DigiKey/Mouser를 검색합니다. 연결 실패 시 Demo 부품으로 대체하지 않습니다.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div class="step">1</div>
+        <div>
+          <h2>BOM 양식 및 컬럼 매핑</h2>
+          <p>회사 BOM의 컬럼명을 자동 인식하고, 필요한 경우 직접 매핑을 수정해 저장합니다.</p>
+        </div>
+      </div>
+      <div class="upload-grid">
+        <label class="dropzone">
+          <input id="bomFile" type="file" accept=".xlsx,.xls,.csv" />
+          <strong>BOM Excel / CSV 선택</strong>
+          <span>파일은 브라우저에서 로컬 처리</span>
+        </label>
+        <div class="file-info">
+          <div><span>파일</span><b id="bomFileName">미선택</b></div>
+          <div><span>시트</span><b id="bomSheetName">-</b></div>
+          <div><span>헤더</span><b id="bomHeaderCount">0개</b></div>
+          <div><span>매핑</span><b id="mappingState">자동</b></div>
+        </div>
+      </div>
+      <div id="headerPreview" class="chips muted">BOM 헤더가 여기에 표시됩니다.</div>
+
+      <details id="mappingDetails" class="mapping-box">
+        <summary>회사 BOM 컬럼 매핑 설정</summary>
+        <div id="mappingEditor" class="mapping-editor muted">BOM 파일을 먼저 업로드하세요.</div>
+        <div class="mapping-actions">
+          <button id="saveMappingBtn" class="secondary-btn" disabled>이 BOM 매핑 저장</button>
+          <button id="resetMappingBtn" class="secondary-btn" disabled>자동 매핑으로 초기화</button>
+        </div>
+      </details>
+
+      <div class="bom-workbench">
+        <div id="selectionModeBanner" class="selection-mode-banner">
+              <b>신규 부품 선정 모드</b>
+              <span>BOM 매핑 완료 → Industrial 자동검색 → 1순위 자동선택 → 대체후보 검토 → BOM 반영</span>
+            </div>
+            <div class="bom-workbench-head">
+          <div>
+            <h3>BOM 부품 선택</h3>
+            <p>BOM의 한 행을 선택하면 해당 품목의 Value/Package/Description을 기준으로 선정 필터가 자동 구성됩니다.</p>
+          </div>
+          <div class="bom-toolbar">
+            <input id="bomRowFilter" placeholder="RefDes / Description / MPN 검색" />
+            <label class="auto-select-toggle"><input id="autoSelectOnBomLoad" type="checkbox" checked> 업로드 후 Industrial 자동선정</label>
+            <button id="autoSelectAllBomBtn" class="primary-btn" disabled>전체 BOM 자동선정</button>
+            <button id="applyAutoSelectionBtn" class="secondary-btn" disabled>자동선정 결과 BOM 반영</button>
+            <button id="refreshBomRowsBtn" class="secondary-btn" disabled>BOM 목록 새로고침</button>
+          </div>
+        </div>
+        <div id="bomAutoProgress" class="bom-auto-progress hidden">
+          <div class="progress-track"><div id="bomAutoProgressBar" class="progress-bar"></div></div>
+          <span id="bomAutoProgressText">자동선정 준비</span>
+        </div>
+        <div id="bomAutoSummary" class="bom-auto-summary muted">BOM 업로드 후 각 행을 Industrial Grade로 자동 분석합니다.</div>
+        <div id="bomRowTable" class="bom-row-table empty-block">BOM 파일을 업로드하면 부품 리스트가 표시됩니다.</div>
+        <div id="selectedBomTarget" class="selected-bom-target muted">선정 대상 BOM 행을 선택하세요.</div>
+      </div>
+
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div class="step">2</div>
+        <div>
+          <h2>부품 데이터 소스</h2>
+          <p>DigiKey를 기본 검색원으로 사용하고, 필요하면 Excel 후보/Mouser/Nexar도 사용할 수 있습니다.</p>
+        </div>
+      </div>
+      <div class="source-grid">
+        <label>실시간 Provider
+          <select id="providerSelect">
+            <option value="auto">Auto (연결된 API 통합)</option>
+            <option value="mouser">Mouser</option>
+            <option value="digikey" selected>DigiKey</option>
+            <option value="nexar">Nexar / Octopart</option>
+          </select>
+        </label>
+        <label class="dropzone compact">
+          <input id="candidateFile" type="file" accept=".xlsx,.xls,.csv" />
+          <strong>후보 리스트 업로드</strong>
+          <span>XLSX / CSV</span>
+        </label>
+        <div class="file-info compact-info">
+          <div><span>현재 데이터</span><b id="candidateSource">내장 Demo</b></div>
+          <div><span>후보 수</span><b id="candidateCount">0개</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div class="step">3</div>
+        <div>
+          <h2>선정 모드</h2>
+          <p>신규 부품 선정 또는 기존 MPN의 대체품 탐색을 선택하세요.</p>
+        </div>
+      </div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="requirements">요구사항 기반 선정</button>
+        <button class="mode-tab" data-mode="replacement">기존 MPN 대체품</button>
+      </div>
+
+      <div id="requirementsPanel" class="mode-panel active">
+        <div class="dk-shell">
+          <div class="dk-target-bar">
+            <div>
+              <span class="dk-label">BOM TARGET</span>
+              <strong id="dkBomTargetTitle">BOM 행을 먼저 선택하세요</strong>
+              <small id="dkBomTargetMeta">선택한 BOM의 조건이 필터에 자동 반영됩니다.</small>
+            </div>
+            <button id="dkUseBomBtn" class="secondary-btn" disabled>BOM 조건 다시 불러오기</button>
+          </div>
+
+          <div class="dk-search-row">
+            <label class="dk-search-box">Search Within / Keyword
+              <input id="dkSearchWithin" placeholder="예: ceramic capacitor / chip resistor / DisplayPort redriver" />
+            </label>
+            <label>검색 개수
+              <select id="dkSearchLimit"><option>20</option><option selected>50</option></select>
+            </label>
+            <button id="dkStartSearchBtn" class="primary-btn">DigiKey식 검색 시작</button>
+            <button id="dkOpenWebBtn" class="secondary-btn">DigiKey Web 열기</button>
+          </div>
+
+          <div class="dk-common">
+            <b>Common Attributes</b>
+            <label><input id="dkInStock" type="checkbox" checked> In Stock</label>
+            <label><input id="dkNormallyStocking" type="checkbox" checked> Normally Stocking</label>
+            <label><input id="dkRoHS" type="checkbox" checked> RoHS Compliant</label>
+            <label><input id="dkHasDatasheet" type="checkbox" checked> Datasheet</label>
+            <label><input id="dkHasCad" type="checkbox"> EDA/CAD Model</label>
+            <label><input id="dkExcludeMarketplace" type="checkbox" checked> Exclude Marketplace</label>
+          </div>
+
+          <div class="dk-result-line">
+            <div><span>Results</span><b id="dkResultsCount">-</b></div>
+            <div><span>BOM Match</span><b id="dkBomMatchCount">-</b></div>
+            <div class="dk-result-note" id="dkSearchState">검색 전</div>
+          </div>
+
+          <div id="dkFilterGrid" class="dk-filter-grid">
+            <div class="empty-block">검색을 시작하면 Manufacturer / Product Status / Packaging 및 DigiKey 파라메트릭 필터가 표시됩니다.</div>
+          </div>
+
+          <div class="dk-applied-row">
+            <b>Applied Filters</b>
+            <div id="dkAppliedFilters" class="chips"><span class="muted">없음</span></div>
+          </div>
+          <div class="button-row dk-actions">
+            <button id="dkClearFiltersBtn" class="secondary-btn">Clear Selections</button>
+            <button id="dkApplyFiltersBtn" class="primary-btn">Apply All</button>
+            <button id="dkScoreBtn" class="secondary-btn">현재 결과 BOM 적합성 점수화</button>
+          </div>
+        </div>
+
+        <details class="engineering-constraints">
+          <summary>Engineering Hard Constraints / 기본 선정 조건</summary>
+          <div class="form-grid">
+            <label>Category / 용도
+              <input id="reqCategory" value="DisplayPort Redriver" list="componentCategoryList" />
+              <datalist id="componentCategoryList">
+                <option value="DisplayPort Redriver"></option><option value="Ceramic Capacitor"></option>
+                <option value="MLCC / Ceramic Capacitor"></option><option value="Chip Resistor"></option>
+                <option value="IC"></option><option value="Connector"></option>
+              </datalist>
+            </label>
+
+            <label>선정 Profile
+              <select id="selectionProfile">
+                <option value="industrial" selected>Industrial Grade (기본)</option>
+                <option value="aecq200">AEC-Q200 (수동부품)</option>
+                <option value="automotive">Automotive (품목별 AEC 자동)</option>
+                <option value="mil_ground">Military / Ground Hi-Rel</option>
+              </select>
+            </label>
+            <label>API 검색어<input id="liveQuery" value="DisplayPort redriver" /></label>
+            <label>선호 제조사<input id="reqManufacturer" placeholder="BOM Category에 따라 자동" /></label>
+            <label>선호 Package<input id="reqPackage" placeholder="예: 0402 / WQFN" /></label>
+            <label>PCB Footprint<input id="reqPCBFootprint" placeholder="BOM의 PCB Footprint 자동 반영" /></label>
+            <label>최소 Data Rate (Gbps)<input id="reqDataRate" type="number" min="0" step="0.1" value="0" /></label>
+            <label>최소 Lane<input id="reqLanes" type="number" min="0" step="1" value="0" /></label>
+            <label>동작온도 범위
+              <select id="reqTempPreset">
+                <option value="-40,85" selected>-40 ~ +85 °C (기본)</option>
+                <option value="-40,100">-40 ~ +100 °C</option><option value="-40,105">-40 ~ +105 °C</option>
+                <option value="-40,125">-40 ~ +125 °C</option><option value="custom">직접 입력</option>
+              </select>
+            </label>
+            <label>최저온도 (°C)<input id="reqTempMin" type="number" value="-40" /></label>
+            <label>최고온도 (°C)<input id="reqTempMax" type="number" value="85" /></label>
+            <label>최소 재고<input id="reqStock" type="number" min="0" value="1" /></label>
+            <label>최대 단가<input id="reqPrice" type="number" min="0" step="0.01" placeholder="제한 없음" /></label>
+            <label>Lifecycle<select id="reqLifecycle"><option value="active" selected>Active / Production 필수</option><option value="">제한 없음</option></select></label>
+            <label>PCB 변경 허용<select id="reqPCBChange"><option value="any">허용</option><option value="minor">최소 변경만</option><option value="none">변경 불가</option></select></label>
+          </div>
+          <div class="toggle-row">
+            <label class="toggle"><input id="autoPreferredManufacturer" type="checkbox" checked><span></span> Category별 기본 제조사 자동 적용</label>
+            <label class="toggle"><input id="bomPackageExact" type="checkbox" checked><span></span> BOM PCB Footprint / Package 일치 우선</label>
+            <label class="toggle"><input id="reqDropIn" type="checkbox"><span></span> Pin-to-Pin 검증 후보만</label>
+            <label class="toggle"><input id="reqPackageHard" type="checkbox"><span></span> Package Hard Constraint</label>
+          </div>
+          <div id="preferredManufacturerHint" class="inline-note">Ceramic Capacitor / MLCC → KEMET, Chip Resistor → VISHAY를 기본 선호 제조사로 사용합니다.</div>
+          <div id="selectionProfileHint" class="inline-note profile-hint"><b>Industrial Grade</b>: -40~+85°C 기본, Active/Production + 재고 + RoHS 중심으로 선정합니다. BOM 전체 자동선정은 항상 Industrial Grade로 실행됩니다.</div>
+        </details>
+
+        <button id="liveSearchBtn" style="display:none"></button>
+        <button id="analyzeBtn" style="display:none"></button>
+      </div>
+
+      <div id="replacementPanel" class="mode-panel">
+        <div class="replacement-grid">
+          <label>기존 MPN
+            <input id="baseMpn" value="SN65DP141RLJ" placeholder="예: SN65DP141RLJ" />
+          </label>
+          <label>대체 목표
+            <select id="replacementGoal">
+              <option value="dropin">PCB 변경 최소 / Drop-in 우선</option>
+              <option value="minor">소폭 회로 변경 허용</option>
+              <option value="performance">성능/수급 우선</option>
+            </select>
+          </label>
+          <label>후보 최대 개수
+            <select id="replacementLimit">
+              <option>8</option>
+              <option selected>15</option>
+              <option>30</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="replacementSearchBtn" class="primary-btn">기존 부품 + 대체품 검색</button>
+          <button id="demoReplacementBtn" class="secondary-btn">Demo 대체품으로 시험</button>
+        </div>
+        <div id="basePartCard" class="base-part muted">기존 MPN을 조회하면 기준 부품 정보가 여기에 표시됩니다.</div>
+        <div class="warning-box">
+          API의 “Substitution / Similar” 정보가 곧 Pin-to-Pin 호환을 의미하지는 않습니다. 패키지·핀맵·전기적 조건은 최종 승인 전에 데이터시트로 검증해야 합니다.
+        </div>
+      </div>
+    </section>
+
+    <section class="card result-card">
+      <div class="section-title">
+        <div class="step">4</div>
+        <div>
+          <h2>적합성 / 수급 위험 결과</h2>
+          <p>Hard Constraint, 설계변경 수준, Lifecycle, 재고, Lead Time을 함께 평가합니다.</p>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div><span>전체 후보</span><b id="kpiAll">0</b></div>
+        <div><span>적합</span><b id="kpiPass">0</b></div>
+        <div><span>조건부</span><b id="kpiConditional">0</b></div>
+        <div><span>부적합</span><b id="kpiFail">0</b></div>
+        <div><span>수급 High Risk</span><b id="kpiRisk">0</b></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>선택</th>
+              <th>판정</th>
+              <th>Score</th>
+              <th>Risk</th>
+              <th>MPN</th>
+              <th>Manufacturer</th>
+              <th>Source</th>
+              <th>Package</th>
+              <th>Data Rate</th>
+              <th>Lane</th>
+              <th>온도</th>
+              <th>Lifecycle</th>
+              <th>Stock</th>
+              <th>Lead Time</th>
+              <th>단가</th>
+              <th>판단 근거</th>
+              <th>Links</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody">
+            <tr><td colspan="17" class="empty">아직 분석하지 않았습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="actions">
+        <button id="compareBtn" class="secondary-btn" disabled>기준 부품과 Spec 비교</button>
+        <button id="addBomBtn" class="secondary-btn" disabled>선정 부품 → 선택 BOM 행 반영</button>
+        <button id="exportReportBtn" class="secondary-btn" disabled>분석 Report 다운로드</button>
+        <button id="downloadBomBtn" class="primary-btn" disabled>선정 완료 BOM Excel 다운로드</button>
+      </div>
+      <div id="selectionInfo" class="selection-info muted">선정된 부품이 없습니다.</div>
+    </section>
+
+    <section class="card" id="comparisonCard">
+      <div class="section-title">
+        <div class="step">5</div>
+        <div>
+          <h2>기준 부품 vs 후보 Spec 비교</h2>
+          <p>API가 제공하는 파라미터/속성을 비교합니다. PDF 데이터시트 원문 자동 해석은 다음 단계 기능입니다.</p>
+        </div>
+      </div>
+      <div id="comparisonArea" class="empty-block">기준 부품과 후보를 선택하면 비교표가 생성됩니다.</div>
+    </section>
+
+
+    <section class="card datasheet-card" id="datasheetCompareCard">
+      <div class="section-title">
+        <div class="step">6</div>
+        <div>
+          <h2>PDF 데이터시트 자동 비교 <span class="v3-badge">V3+</span></h2>
+          <p>기존 부품과 후보 부품의 PDF를 브라우저에서 직접 읽어 주요 Spec, Pin Map, 설계 주의항목을 자동 추출·비교합니다.</p>
+        </div>
+      </div>
+
+      <div class="datasheet-upload-grid">
+        <div class="datasheet-side">
+          <div class="datasheet-side-title">
+            <b>기준 부품</b>
+            <button id="fillBaseMpnBtn" class="mini-btn">기준 MPN 가져오기</button>
+          </div>
+          <label>기준 MPN
+            <input id="dsBaseMpn" placeholder="예: SN65DP141RLJ" />
+          </label>
+          <label class="dropzone datasheet-drop">
+            <input id="baseDatasheetFile" type="file" accept=".pdf,application/pdf" />
+            <strong>기준 데이터시트 PDF</strong>
+            <span id="baseDatasheetName">PDF 선택</span>
+          </label>
+          <div id="baseParseState" class="parse-state muted">아직 분석하지 않았습니다.</div>
+        </div>
+
+        <div class="vs-mark">VS</div>
+
+        <div class="datasheet-side">
+          <div class="datasheet-side-title">
+            <b>후보 부품</b>
+            <button id="fillCandidateMpnBtn" class="mini-btn">선정 후보 가져오기</button>
+          </div>
+          <label>후보 MPN
+            <input id="dsCandidateMpn" placeholder="결과에서 후보를 선택하세요" />
+          </label>
+          <label class="dropzone datasheet-drop">
+            <input id="candidateDatasheetFile" type="file" accept=".pdf,application/pdf" />
+            <strong>후보 데이터시트 PDF</strong>
+            <span id="candidateDatasheetName">PDF 선택</span>
+          </label>
+          <div id="candidateParseState" class="parse-state muted">아직 분석하지 않았습니다.</div>
+        </div>
+      </div>
+
+      <div class="datasheet-options">
+        <label class="toggle"><input id="dsPinCompare" type="checkbox" checked><span></span> Pin Map 비교</label>
+        <label class="toggle"><input id="dsImpedanceCompare" type="checkbox" checked><span></span> Impedance / AC Coupling 비교</label>
+        <label class="toggle"><input id="dsAbsMaxCompare" type="checkbox" checked><span></span> Absolute Maximum 근거 추출</label>
+        <label class="toggle"><input id="dsInterfaceCompare" type="checkbox" checked><span></span> AUX / HPD / Interface 문구 비교</label>
+      </div>
+
+      <div class="button-row">
+        <button id="parseDatasheetsBtn" class="primary-btn">PDF 2개 자동 분석 및 비교</button>
+        <button id="exportDatasheetReportBtn" class="secondary-btn" disabled>데이터시트 비교 Report Excel</button>
+        <button id="clearDatasheetBtn" class="secondary-btn">초기화</button>
+      </div>
+
+      <div id="datasheetProgress" class="progress-wrap hidden">
+        <div class="progress-track"><div id="datasheetProgressBar" class="progress-bar"></div></div>
+        <span id="datasheetProgressText">PDF 분석 준비</span>
+      </div>
+
+      <div id="datasheetVerdict" class="datasheet-verdict neutral">
+        <div>
+          <span>자동 예비판정</span>
+          <strong>PDF 2개를 선택하면 비교를 시작할 수 있습니다.</strong>
+        </div>
+      </div>
+
+      <div class="datasheet-tabs">
+        <button class="ds-tab active" data-dstab="summary">핵심 Spec</button>
+        <button class="ds-tab" data-dstab="pins">Pin Map</button>
+        <button class="ds-tab" data-dstab="evidence">설계 근거</button>
+        <button class="ds-tab" data-dstab="raw">추출 정보</button>
+      </div>
+
+      <div id="dsPanelSummary" class="ds-panel active">
+        <div id="datasheetSummaryArea" class="empty-block">비교 결과가 여기에 표시됩니다.</div>
+      </div>
+
+      <div id="dsPanelPins" class="ds-panel">
+        <div id="pinCompareArea" class="empty-block">Pin Functions / Terminal Functions 표를 찾으면 핀별 비교를 표시합니다.</div>
+      </div>
+
+      <div id="dsPanelEvidence" class="ds-panel">
+        <div id="evidenceCompareArea" class="empty-block">Impedance, AC Coupling, AUX/HPD, Absolute Maximum 관련 근거 문장을 표시합니다.</div>
+      </div>
+
+      <div id="dsPanelRaw" class="ds-panel">
+        <div id="rawExtractArea" class="empty-block">자동 추출된 항목 및 페이지 정보를 표시합니다.</div>
+      </div>
+
+      <div class="warning-box datasheet-warning">
+        <b>중요:</b> V3의 PDF 비교는 설계 검토를 빠르게 하기 위한 <b>예비 비교</b>입니다.
+        PDF 텍스트 배치, 표 구조, 제조사 작성 방식에 따라 일부 값이나 핀 표가 누락될 수 있으므로 최종 ECO/양산 승인 전 원문 데이터시트를 반드시 확인하세요.
+      </div>
+    </section>
+
+
+    <section class="card eco-card" id="ecoCard">
+      <div class="section-title">
+        <div class="step">7</div>
+        <div>
+          <h2>ECO / 설계변경 영향 자동 분석 <span class="v4-badge">V4+</span></h2>
+          <p>PDF 자동 비교 결과를 회로도·PCB·FW·SI·검증 영향으로 변환하고 ECO 검토표를 자동 생성합니다.</p>
+        </div>
+      </div>
+
+      <div class="eco-context-grid">
+        <label>Project / Board
+          <input id="ecoProject" placeholder="예: DP Main Board Rev.A" />
+        </label>
+        <label>현재 PCB Differential Z (Ω)
+          <input id="ecoBoardImpedance" type="number" min="20" max="200" step="1" value="85" />
+        </label>
+        <label>현재 전원 Rail (V)
+          <input id="ecoBoardSupply" type="number" min="0" max="20" step="0.1" value="3.3" />
+        </label>
+        <label>PCB 변경 정책
+          <select id="ecoPcbPolicy">
+            <option value="none">PCB 변경 불가</option>
+            <option value="minor" selected>최소 변경 허용</option>
+            <option value="any">변경 허용</option>
+          </select>
+        </label>
+        <label>Firmware 변경
+          <select id="ecoFwPolicy">
+            <option value="none">FW 변경 불가</option>
+            <option value="allowed" selected>변경 가능</option>
+            <option value="unknown">미정</option>
+          </select>
+        </label>
+        <label>목표 변경 수준
+          <select id="ecoTarget">
+            <option value="dropin" selected>Drop-in 우선</option>
+            <option value="minor">Minor ECO 허용</option>
+            <option value="redesign">Redesign 허용</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button id="generateEcoBtn" class="primary-btn" disabled>설계변경 영향 자동 생성</button>
+        <button id="exportEcoBtn" class="secondary-btn" disabled>ECO Excel Report</button>
+        <button id="copyEcoSummaryBtn" class="secondary-btn" disabled>ECO 요약 복사</button>
+      </div>
+
+      <div id="ecoReadyHint" class="inline-note">
+        먼저 위의 PDF 데이터시트 자동 비교를 완료하세요.
+      </div>
+
+      <div id="ecoOverview" class="eco-overview">
+        <div class="eco-kpi"><span>Change Class</span><b id="ecoClass">-</b></div>
+        <div class="eco-kpi"><span>Critical</span><b id="ecoCritical">0</b></div>
+        <div class="eco-kpi"><span>Major</span><b id="ecoMajor">0</b></div>
+        <div class="eco-kpi"><span>Minor</span><b id="ecoMinor">0</b></div>
+        <div class="eco-kpi"><span>Extraction Confidence</span><b id="ecoConfidence">-</b></div>
+      </div>
+
+      <div id="ecoHeadline" class="eco-headline neutral">
+        PDF 비교 완료 후 자동 생성할 수 있습니다.
+      </div>
+
+      <div class="eco-subtitle">
+        <h3>자동 생성 Change Items</h3>
+        <span>Owner와 Status는 화면에서 직접 수정할 수 있습니다.</span>
+      </div>
+      <div id="ecoChangeArea" class="empty-block">변경 영향 항목이 여기에 표시됩니다.</div>
+
+      <div class="eco-two-col">
+        <div>
+          <div class="eco-subtitle"><h3>ECO 검증 Checklist</h3><span>완료 항목을 체크하세요.</span></div>
+          <div id="ecoChecklist" class="eco-checklist empty-block">Checklist가 아직 생성되지 않았습니다.</div>
+        </div>
+        <div>
+          <div class="eco-subtitle"><h3>자동 ECO Summary</h3><span>ECN/ECR 검토문 초안으로 활용할 수 있습니다.</span></div>
+          <div id="ecoSummaryText" class="eco-summary-text">ECO Summary가 아직 생성되지 않았습니다.</div>
+        </div>
+      </div>
+
+      <div class="warning-box">
+        <b>승인 제한:</b> V4는 변경점과 검증 작업을 자동 <b>제안</b>하지만 ECO 승인 자체를 자동화하지 않습니다.
+        Pin assignment, 전원 시퀀스, Absolute Maximum, SI/PI, 열/EMC 및 실제 회로 연결은 원문 데이터시트와 회로도/PCB에서 최종 확인해야 합니다.
+      </div>
+    </section>
+
+
+    <section class="card circuit-card" id="circuitCard">
+      <div class="section-title">
+        <div class="step">8</div>
+        <div>
+          <h2>OrCAD / Netlist 실제 회로 변경 분석 <span class="v5-badge">V5</span></h2>
+          <p>Windows에서 OrCAD PCB Editor가 생성한 pstxnet.dat 또는 Net/RefDes/Pin CSV를 읽어 실제 회로 변경 영향을 분석합니다.</p>
+        </div>
+      </div>
+
+      <div class="circuit-source-grid">
+        <div class="circuit-source-box">
+          <h3>① Connectivity</h3>
+          <label class="dropzone circuit-drop">
+            <input id="netlistFile" type="file" accept=".dat,.net,.txt,.csv,.xlsx,.xls" />
+            <strong>pstxnet.dat 또는 Net/Pin CSV</strong>
+            <span id="netlistFileName">OrCAD PCB Editor netlist 권장</span>
+          </label>
+          <div id="netlistParseState" class="parse-state muted">아직 로드하지 않았습니다.</div>
+        </div>
+
+        <div class="circuit-source-box">
+          <h3>② 선택: 부품정보 보강</h3>
+          <label class="dropzone circuit-drop optional">
+            <input id="partsFile" type="file" accept=".dat,.txt,.csv,.xlsx,.xls" />
+            <strong>pstxprt.dat / Component CSV</strong>
+            <span id="partsFileName">Value / Footprint / MPN 보강</span>
+          </label>
+          <div id="partsParseState" class="parse-state muted">없어도 분석 가능합니다.</div>
+        </div>
+
+        <div class="circuit-source-box settings">
+          <h3>③ 분석 대상</h3>
+          <label>기존 IC RefDes
+            <input id="targetRefdes" value="U10" placeholder="예: U10" />
+          </label>
+          <label>분석 깊이
+            <select id="circuitDepth">
+              <option value="1">직접 연결만</option>
+              <option value="2" selected>수동소자 1개 통과</option>
+              <option value="3">수동소자 2개까지 추적</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="circuit-options">
+        <label class="toggle"><input id="usePdfPins" type="checkbox" checked><span></span> V3 PDF Pin Map 사용</label>
+        <label class="toggle"><input id="tracePassives" type="checkbox" checked><span></span> R/C/L/FB 주변회로 추적</label>
+        <label class="toggle"><input id="checkDiffPair" type="checkbox" checked><span></span> Differential Pair 검사</label>
+        <label class="toggle"><input id="checkPulls" type="checkbox" checked><span></span> Pull-up/down / Strap 검사</label>
+      </div>
+
+      <div class="button-row">
+        <button id="analyzeCircuitBtn" class="primary-btn" disabled>실제 회로 변경점 분석</button>
+        <button id="loadDemoCircuitBtn" class="secondary-btn">Demo OrCAD Netlist</button>
+        <button id="exportCircuitBtn" class="secondary-btn" disabled>회로 변경 Report Excel</button>
+        <button id="mergeCircuitEcoBtn" class="secondary-btn" disabled>ECO 분석에 병합</button>
+      </div>
+
+      <div class="inline-note">
+        Windows/OrCAD 기준 권장 입력은 Capture에서 PCB Editor용 Netlist 생성 후 만들어지는 <b>pstxnet.dat</b>입니다.
+        `.dsn` 원본은 V5에서 직접 파싱하지 않습니다. CSV/XLSX는 최소 <b>Net, RefDes, Pin</b> 컬럼이 필요합니다.
+      </div>
+
+      <div class="circuit-kpis">
+        <div><span>Nets</span><b id="circuitNetCount">0</b></div>
+        <div><span>Target Pins</span><b id="circuitPinCount">0</b></div>
+        <div><span>Pin Changes</span><b id="circuitPinChanges">0</b></div>
+        <div><span>Passive Paths</span><b id="circuitPassiveCount">0</b></div>
+        <div><span>Circuit Class</span><b id="circuitClass">-</b></div>
+      </div>
+
+      <div id="circuitHeadline" class="eco-headline neutral">
+        Netlist를 로드하면 실제 회로 연결을 기준으로 분석할 수 있습니다.
+      </div>
+
+      <div class="circuit-tabs">
+        <button class="circuit-tab active" data-circuittab="pins">Pin ↔ Net 영향</button>
+        <button class="circuit-tab" data-circuittab="paths">주변 수동소자</button>
+        <button class="circuit-tab" data-circuittab="changes">회로 변경점</button>
+        <button class="circuit-tab" data-circuittab="nets">Net Browser</button>
+      </div>
+
+      <div id="circuitPanelPins" class="circuit-panel active">
+        <div id="circuitPinArea" class="empty-block">분석 결과가 여기에 표시됩니다.</div>
+      </div>
+      <div id="circuitPanelPaths" class="circuit-panel">
+        <div id="circuitPathArea" class="empty-block">Series C/R, pull-up/down, termination 후보를 표시합니다.</div>
+      </div>
+      <div id="circuitPanelChanges" class="circuit-panel">
+        <div id="circuitChangeArea" class="empty-block">SCH / PCB / FW / SI 변경 필요 항목을 표시합니다.</div>
+      </div>
+      <div id="circuitPanelNets" class="circuit-panel">
+        <div class="net-filter-row">
+          <input id="netFilter" placeholder="Net / RefDes 검색" />
+          <span id="netBrowserCount" class="muted"></span>
+        </div>
+        <div id="circuitNetArea" class="empty-block">Netlist를 로드하세요.</div>
+      </div>
+
+      <div class="warning-box">
+        <b>V5 판정 원칙:</b> 실제 Net 연결을 추가 근거로 사용하지만 자동 승인하지 않습니다.
+        동일 Pin 번호라도 후보의 전기적 특성, signal direction, termination, power sequence가 다를 수 있으므로 PDF 원문과 회로도를 함께 검증해야 합니다.
+      </div>
+    </section>
+
+    <section class="card note-card">
+      <h3>V5 설계 원칙</h3>
+      <p>
+        API 추천값은 “후보 생성”에 사용하고, 최종 적합성은 Hard Constraint + 명시된 Spec + 엔지니어 검증으로 결정합니다.
+        특히 Pin-to-Pin, Differential Impedance, Absolute Maximum, Power Sequence, AC Coupling 위치는 자동 추론만으로 승인하지 않습니다.
+      </p>
+    </section>
+  </main>
+
+  <footer>Smart BOM Selector V5.3K · Resilient DigiKey/Mouser Connection · No Demo Auto-Fallback</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./app.js"></script>
+  <script src="./bomsearch.js"></script>
+  <script type="module" src="./datasheet.js"></script>
+  <script type="module" src="./eco.js"></script>
+  <script type="module" src="./circuit.js"></script>
+  <script src="./desktop.js"></script>
+</body>
+</html>
